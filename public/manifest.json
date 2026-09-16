@@ -1,0 +1,23 @@
+{
+  "name": "Tracport",
+  "short_name": "Tracport",
+  "description": "Inspection reporting app with offline support and persistent data storage",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#040273",
+  "theme_color": "#040273",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

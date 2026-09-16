@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-lobster {
+    font-family: 'Lobster Two', cursive;
+  }
+  .font-quicksand {
+    font-family: 'Quicksand', sans-serif;
+  }
+  .font-poppins {
+    font-family: 'Poppins', sans-serif;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow: 0 15px 35px rgba(255, 153, 51, 0.25), 0 10px 25px rgba(19, 136, 8, 0.25);
+  }
+}
+
+.flag-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Tracport",
+  "description": "Inspection reporting web application with GPS capture, photo uploads, offline sync, and persistent data storage.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
