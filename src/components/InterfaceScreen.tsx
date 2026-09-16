@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { 
   FolderPlus, FolderOpen, Search, MapPin, 
   Clock, Star, Image as ImageIcon, ChevronRight, 
-  RotateCw, CheckCircle2, Cloud, LogOut, Send, Check
+  CheckCircle2, Cloud, LogOut, Send, Check
 } from 'lucide-react';
 import { Inspection } from '../types';
 import { formatDateOnlyDDMMYYYY } from '../utils/date';
@@ -197,18 +197,6 @@ export const InterfaceScreen: React.FC<InterfaceScreenProps> = ({
             <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
 
-          {/* Sync Trigger button */}
-          {pendingSyncCount > 0 && isOnline && (
-            <button
-              onClick={onManualSync}
-              className="inline-flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold bg-amber-400 text-neutral-900 shadow-md hover:bg-amber-300 transition-colors cursor-pointer shrink-0"
-              title="Click to submit all offline reports now"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>Submit All ({pendingSyncCount})</span>
-            </button>
-          )}
-
           {/* Logout */}
           <button
             onClick={onLogout}
@@ -342,23 +330,6 @@ export const InterfaceScreen: React.FC<InterfaceScreenProps> = ({
                 </div>
               ) : (
                 <>
-                  {/* If offline reports exist and online, show compact Sync All bar */}
-                  {((activeTab === 'all' && totalOffline > 0) || (activeTab === 'offline' && offlineInspections.length > 0)) && isOnline && (
-                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <Cloud className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{totalOffline} offline {totalOffline === 1 ? 'report' : 'reports'} ready</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={onManualSync}
-                        className="text-xs text-amber-400 hover:text-white font-semibold underline cursor-pointer"
-                      >
-                        Submit All
-                      </button>
-                    </div>
-                  )}
-
                   {/* Render Cards based on active tab */}
                   {activeTab === 'all' && filtered.map((item) => renderInspectionCard(item))}
                   {activeTab === 'submitted' && submittedInspections.map((item) => renderInspectionCard(item))}

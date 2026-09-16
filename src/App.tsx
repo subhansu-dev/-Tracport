@@ -81,7 +81,7 @@ export default function App() {
   const handleSaveOffline = async (data: Omit<Inspection, 'id' | 'createdAt'>) => {
     await saveInspectionReport({ ...data, isSynced: false });
     await refreshData();
-    showToast('Saved offline to local database', 'success');
+    showToast('Inspection saved', 'success');
   };
 
   const handleSubmitReport = async (data: Omit<Inspection, 'id' | 'createdAt'>) => {
@@ -90,7 +90,7 @@ export default function App() {
     showToast(
       result.savedOnline
         ? 'Inspection successfully submitted & saved to server database!'
-        : 'Inspection saved offline. Will sync when online.',
+        : 'Inspection saved',
       'success'
     );
     setTimeout(() => {

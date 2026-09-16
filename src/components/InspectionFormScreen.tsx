@@ -449,12 +449,12 @@ export const InspectionFormScreen: React.FC<InspectionFormScreenProps> = ({
     setIsSubmitting(true);
     try {
       await onSaveOffline(getFormData());
-      onShowToast('Inspection saved offline successfully', 'success');
+      onShowToast('Inspection saved', 'success');
       setTimeout(() => {
         onCancel();
       }, 600);
     } catch (e) {
-      onShowToast('Failed to save offline', 'error');
+      onShowToast('Failed to save inspection', 'error');
     } finally {
       setIsSubmitting(false);
     }
