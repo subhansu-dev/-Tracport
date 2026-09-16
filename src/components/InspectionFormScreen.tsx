@@ -15,7 +15,7 @@ import { LiveCameraModal, formatDDMMYYYY } from './LiveCameraModal';
 
 interface InspectionFormScreenProps {
   isOnline: boolean;
-  offlineQueueCount: number;
+  offlineQueueCount?: number;
   onSaveOffline: (data: Omit<Inspection, 'id' | 'createdAt'>) => Promise<void>;
   onSubmitReport: (data: Omit<Inspection, 'id' | 'createdAt'>) => Promise<void>;
   onCancel: () => void;
@@ -28,7 +28,6 @@ const MAX_DOC_BYTES = 12 * 1024 * 1024; // 12MB safety limit
 
 export const InspectionFormScreen: React.FC<InspectionFormScreenProps> = ({
   isOnline,
-  offlineQueueCount,
   onSaveOffline,
   onSubmitReport,
   onCancel,
@@ -481,7 +480,7 @@ export const InspectionFormScreen: React.FC<InspectionFormScreenProps> = ({
   return (
     <div className="min-h-screen w-full bg-[#1e222b] py-6 sm:py-10 px-3 sm:px-6 font-poppins flex flex-col items-center">
       {/* Top navigation */}
-      <div className="w-full max-w-2xl flex items-center justify-between mb-4">
+      <div className="w-full max-w-2xl flex items-center mb-4">
         <button
           onClick={onCancel}
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#282d38] hover:bg-[#323946] text-neutral-300 hover:text-white text-xs sm:text-sm font-medium border border-[#3a4252] transition-colors cursor-pointer"
@@ -489,12 +488,6 @@ export const InspectionFormScreen: React.FC<InspectionFormScreenProps> = ({
           <ArrowLeft className="w-4 h-4" />
           <span>Dashboard</span>
         </button>
-
-        {offlineQueueCount > 0 && (
-          <span className="text-xs text-amber-300 bg-amber-950/50 border border-amber-800/60 px-3 py-1 rounded-full font-medium">
-            {offlineQueueCount} offline pending
-          </span>
-        )}
       </div>
 
       {/* Main Inspection Card */}
