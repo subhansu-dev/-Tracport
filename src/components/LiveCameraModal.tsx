@@ -267,8 +267,42 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
   useEffect(() => {
     if (isOpen && (!currentCoords || !currentLocationName)) {
       if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        let isDone = false;
+        const triggerFallback = () => {
+          if (isDone) return;
+          isDone = true;
+          let lat = 29.17173;
+          let lon = 75.73568;
+          let area = 'Hisar, Haryana';
+          let pin = '125001';
+          try {
+            const saved = localStorage.getItem('tracport_last_location');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (parsed.lat && parsed.lon) {
+                lat = parsed.lat;
+                lon = parsed.lon;
+                if (parsed.areaName) area = parsed.areaName;
+                if (parsed.pincode) pin = parsed.pincode;
+              }
+            }
+          } catch {}
+          if (onLocationDetected) {
+            onLocationDetected(
+              area,
+              { latitude: lat, longitude: lon, accuracy: 15, areaName: area, pincode: pin },
+              pin
+            );
+          }
+        };
+
+        const timer = setTimeout(triggerFallback, 3500);
+
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
+            if (isDone) return;
+            isDone = true;
+            clearTimeout(timer);
             const lat = pos.coords.latitude;
             const lon = pos.coords.longitude;
             const accuracy = pos.coords.accuracy;
@@ -309,31 +343,9 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
           },
           (err) => {
             console.warn('Camera modal geolocation fallback:', err);
-            let lat = 29.17173;
-            let lon = 75.73568;
-            let area = 'Hisar, Haryana';
-            let pin = '125001';
-            try {
-              const saved = localStorage.getItem('tracport_last_location');
-              if (saved) {
-                const parsed = JSON.parse(saved);
-                if (parsed.lat && parsed.lon) {
-                  lat = parsed.lat;
-                  lon = parsed.lon;
-                  if (parsed.areaName) area = parsed.areaName;
-                  if (parsed.pincode) pin = parsed.pincode;
-                }
-              }
-            } catch {}
-            if (onLocationDetected) {
-              onLocationDetected(
-                area,
-                { latitude: lat, longitude: lon, accuracy: 15, areaName: area, pincode: pin },
-                pin
-              );
-            }
+            triggerFallback();
           },
-          { enableHighAccuracy: true, timeout: 6000, maximumAge: 15000 }
+          { enableHighAccuracy: true, timeout: 3500, maximumAge: 15000 }
         );
       } else {
         let lat = 29.17173;
@@ -378,7 +390,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
     setCameraError(null);
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraError('Live camera is not supported on this browser.');
+      setCameraError('Live camera is not supported on this browser or app wrapper.');
       setIsInitializing(false);
       return;
     }
@@ -393,29 +405,58 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
         audio: false,
       };
 
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      }
+      const fetchStream = async (): Promise<MediaStream> => {
+        try {
+          return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch {
+          return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+      };
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('CAMERA_TIMEOUT')), 5000)
+      );
+
+      const stream = await Promise.race([fetchStream(), timeoutPromise]);
 
       streamRef.current = stream;
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch((err) => {
-          console.warn('Video play error:', err);
-        });
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.muted = true;
+        video.defaultMuted = true;
+        video.playsInline = true;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.setAttribute('autoplay', 'true');
+
+        const tryPlay = () => {
+          video.play().catch((e) => {
+            console.warn('Video auto-play pending gesture:', e);
+          });
+        };
+
+        video.onloadedmetadata = tryPlay;
+        video.oncanplay = tryPlay;
+        video.onloadeddata = tryPlay;
+        tryPlay();
       }
       setIsInitializing(false);
     } catch (err: unknown) {
-      console.error('Camera access error:', err);
+      console.warn('Camera access status:', err);
       setIsInitializing(false);
-      const errName = (err as { name?: string }).name;
-      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-        setCameraError('Camera permission denied. Please allow camera access in browser settings.');
+      const errObj = err as { name?: string; message?: string };
+      const isDenied =
+        errObj?.name === 'NotAllowedError' ||
+        errObj?.name === 'PermissionDeniedError' ||
+        (typeof errObj?.message === 'string' && errObj.message.toLowerCase().includes('permission denied'));
+
+      if (errObj?.message === 'CAMERA_TIMEOUT') {
+        setCameraError('Camera initialization timed out. Please check permissions and tap Retry.');
+      } else if (isDenied) {
+        setCameraError('Camera permission was denied. Please allow Camera access in browser or device settings.');
       } else {
-        setCameraError('Could not start camera feed. Please check device camera.');
+        setCameraError('Could not start live camera feed. Please check device camera permissions.');
       }
     }
   }, [stopStream]);
@@ -469,11 +510,19 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
 
   // Trigger capture from camera and show Preview Screen
   const handleCapture = () => {
-    if (!videoRef.current || isInitializing || cameraError) return;
+    if (previewData) return;
 
     const video = videoRef.current;
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      onShowToast('Camera feed not ready yet', 'info');
+    if (video && video.paused) {
+      video.play().catch(() => {});
+    }
+
+    // If live video is not ready, has 0 dimensions, is initializing, or errored:
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0 || isInitializing || cameraError) {
+      if (video && video.paused) {
+        video.play().catch(() => {});
+      }
+      fallbackInputRef.current?.click();
       return;
     }
 
@@ -484,7 +533,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
     try {
       const cleanDataUrl = captureCleanImageCanvas(video, video.videoWidth, video.videoHeight);
       if (!cleanDataUrl) {
-        onShowToast('Failed to process captured frame', 'error');
+        fallbackInputRef.current?.click();
         return;
       }
 
@@ -1080,36 +1129,66 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
           <>
             {cameraError ? (
               <div className="p-6 text-center max-w-sm space-y-4">
-                <div className="w-12 h-12 rounded-full bg-rose-950/80 border border-rose-800 text-rose-400 mx-auto flex items-center justify-center">
-                  <AlertTriangle className="w-6 h-6" />
+                <div className="w-14 h-14 rounded-full bg-rose-950/80 border border-rose-800 text-rose-400 mx-auto flex items-center justify-center shadow-lg">
+                  <AlertTriangle className="w-7 h-7" />
                 </div>
-                <p className="text-sm text-neutral-300">{cameraError}</p>
-                <div className="flex flex-col gap-2">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-white">Camera Unavailable</h4>
+                  <p className="text-xs text-neutral-300 leading-relaxed">{cameraError}</p>
+                </div>
+                <div className="flex flex-col gap-2.5 pt-1">
                   <button
                     type="button"
                     onClick={() => startCamera(facingMode)}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold cursor-pointer"
+                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-semibold cursor-pointer transition-colors shadow"
                   >
                     Retry Camera
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fallbackInputRef.current?.click()}
-                    className="px-4 py-2 rounded-lg bg-neutral-800 text-neutral-200 text-xs font-medium border border-neutral-700 cursor-pointer"
-                  >
-                    Open Native Camera
                   </button>
                 </div>
               </div>
             ) : (
-              <>
+              <div
+                className="relative w-full h-full flex items-center justify-center cursor-pointer"
+                onClick={() => {
+                  if (videoRef.current && videoRef.current.paused) {
+                    videoRef.current.play().catch(() => {});
+                  }
+                }}
+                onTouchStart={() => {
+                  if (videoRef.current && videoRef.current.paused) {
+                    videoRef.current.play().catch(() => {});
+                  }
+                }}
+              >
                 <video
-                  ref={videoRef}
+                  ref={(node) => {
+                    videoRef.current = node;
+                    if (node) {
+                      node.muted = true;
+                      node.defaultMuted = true;
+                      node.playsInline = true;
+                      node.setAttribute('playsinline', 'true');
+                      node.setAttribute('webkit-playsinline', 'true');
+                      node.setAttribute('autoplay', 'true');
+                    }
+                  }}
                   autoPlay
                   playsInline
                   muted
+                  poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"
                   className="w-full h-full object-cover"
                 />
+
+                {/* Connecting overlay while initializing */}
+                {isInitializing && (
+                  <div className="absolute inset-0 bg-neutral-950/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3.5 z-10 p-4 text-center">
+                    <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                    <div>
+                      <p className="text-sm text-white font-medium">Starting camera...</p>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">Please wait a moment</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Viewfinder crosshairs overlay */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -1117,7 +1196,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                     <Crosshair className="w-6 h-6 text-white/30 absolute inset-0 m-auto" />
                   </div>
                 </div>
-              </>
+              </div>
             )}
 
             {/* Hidden native camera input for fallback */}
@@ -1231,36 +1310,37 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
         </div>
       ) : (
         /* CAMERA SHUTTER & LIVE CONTROLS */
-        <div className="w-full px-6 py-5 bg-neutral-950/90 backdrop-blur-md border-t border-neutral-800 flex items-center justify-between max-w-2xl z-20">
-          <div className="w-20 text-left">
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300">
-              {capturedCount} {capturedCount === 1 ? 'photo' : 'photos'}
-            </span>
-          </div>
+        <div className="w-full px-4 sm:px-6 py-4 bg-neutral-950/90 backdrop-blur-md border-t border-neutral-800 flex flex-col items-center gap-2 max-w-2xl z-20">
+          <div className="w-full flex items-center justify-between">
+            <div className="w-24 text-left">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300">
+                {capturedCount} {capturedCount === 1 ? 'photo' : 'photos'}
+              </span>
+            </div>
 
-          {/* Large Shutter Button */}
-          <div className="flex items-center justify-center">
-            <button
-              type="button"
-              onClick={handleCapture}
-              disabled={isInitializing || !!cameraError}
-              className="w-18 h-18 rounded-full border-4 border-white/80 bg-white/20 hover:bg-white/40 active:scale-95 flex items-center justify-center shadow-lg transition-all cursor-pointer disabled:opacity-40"
-              title="Take Photo"
-            >
-              <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
-                <Camera className="w-6 h-6 text-neutral-900" />
-              </div>
-            </button>
-          </div>
+            {/* Large Shutter Button - Always functional */}
+            <div className="flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleCapture}
+                className="w-18 h-18 rounded-full border-4 border-white/80 bg-white/20 hover:bg-white/40 active:scale-95 flex items-center justify-center shadow-lg transition-all cursor-pointer"
+                title="Take Photo"
+              >
+                <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-neutral-900" />
+                </div>
+              </button>
+            </div>
 
-          <div className="w-20 text-right">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 cursor-pointer"
-            >
-              Cancel
-            </button>
+            <div className="w-24 text-right">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

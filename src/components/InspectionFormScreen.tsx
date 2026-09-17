@@ -239,8 +239,20 @@ export const InspectionFormScreen: React.FC<InspectionFormScreenProps> = ({
       return;
     }
 
+    let isHandled = false;
+    const safetyTimer = setTimeout(() => {
+      if (!isHandled) {
+        isHandled = true;
+        const fb = getFallbackCoords();
+        applyCoordinatesLocation(fb.lat, fb.lon, 15, fb.area, fb.pin);
+      }
+    }, 4500);
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        if (isHandled) return;
+        isHandled = true;
+        clearTimeout(safetyTimer);
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
         const accuracy = pos.coords.accuracy || 10;
@@ -263,6 +275,9 @@ export const InspectionFormScreen: React.FC<InspectionFormScreenProps> = ({
         applyCoordinatesLocation(lat, lon, accuracy, resolvedArea, resolvedPin);
       },
       async (err) => {
+        if (isHandled) return;
+        isHandled = true;
+        clearTimeout(safetyTimer);
         console.warn('GPS hardware notice (resolving from coordinates):', err);
         // When offline or GPS hardware lock is unavailable: never error or say GPS unavailable!
         // Seamlessly use coordinates to get information exactly as when offline
